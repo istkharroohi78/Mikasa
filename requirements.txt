@@ -12,7 +12,7 @@ numpy
 opencv-python
 pillow
 psutil
-py-tgcalls==2.2.8
+py-tgcalls
 pytgcrypto
 kurigram
 python-dotenv
@@ -21,9 +21,8 @@ requests
 speedtest-cli
 spotipy
 unidecode
-uvloop==0.21.0; sys_platform != "win32"
+uvloop; sys_platform != "win32"
 yt-dlp
 youtube-search
 youtube-search-python
 py-yt-search
-
