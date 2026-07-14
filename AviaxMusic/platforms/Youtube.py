@@ -5,189 +5,93 @@ from typing import Union
 import yt_dlp
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
-from AviaxMusic.utils.formatters import time_to_seconds
+from py_yt import VideosSearch, Playlist
 import aiohttp
-from AviaxMusic import LOGGER
 
-try:
-    from py_yt import VideosSearch
-except ImportError:
-    from youtubesearchpython.__future__ import VideosSearch
+API_URL = os.environ.get("SHRUTI_API_URL", "https://api.shrutibots.site")
 
-# ==========================================
-# SINGLE API CONFIGURATION
-# ==========================================
-API_URL = os.environ.get("API_URL", "https://api.shrutibots.site")
-API_KEY = os.environ.get("API_KEY", "ShrutiBotsC0WH1GowF2HkGoKv4F3y")
+API_KEY = os.environ.get("SHRUTI_API_KEY", "ShrutiBotsC0WH1GowF2HkGoKv4F3y") ## Get This API KEY FROM TELEGRAM BOT USERNAME: @SHRUTIAPIBOT 
 
-# Strict YouTube Regex Check
-YOUTUBE_REGEX = re.compile(r"^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$")
+DOWNLOAD_DIR = "downloads"
 
-def is_valid_youtube_link(link: str) -> bool:
-    """Checks if the provided link is a strictly valid YouTube URL."""
-    # Agar 11 character ka video ID hai (internal bot process), allow it
-    if len(link) == 11 and not link.startswith("http"):
-        return True
-    return bool(YOUTUBE_REGEX.match(link))
+
+def time_to_seconds(time):
+    stringt = str(time)
+    return sum(int(x) * 60 ** i for i, x in enumerate(reversed(stringt.split(":"))))
+
 
 async def download_song(link: str) -> str:
-    if not is_valid_youtube_link(link):
-        return None
-
-    video_id = link.split('v=')[-1].split('&')[0] if 'v=' in link else link
-
+    video_id = link.split("v=")[-1].split("&")[0] if "v=" in link else link
     if not video_id or len(video_id) < 3:
         return None
 
-    DOWNLOAD_DIR = "downloads"
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.mp3")
-
-    if os.path.exists(file_path):
+    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
         return file_path
 
     try:
         async with aiohttp.ClientSession() as session:
-            # Passing API key in both params and headers for compatibility
-            params = {"url": video_id, "type": "audio", "api_key": API_KEY, "key": API_KEY}
-            headers = {"Authorization": f"Bearer {API_KEY}"}
-
             async with session.get(
                 f"{API_URL}/download",
-                params=params,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    download_token = data.get("download_token")
-
-                    if download_token:
-                        stream_url = f"{API_URL}/stream/{video_id}?type=audio&token={download_token}"
-
-                        async with session.get(
-                            stream_url,
-                            headers=headers,
-                            timeout=aiohttp.ClientTimeout(total=300)
-                        ) as file_response:
-                            
-                            # Handle redirects if the API sends one
-                            if file_response.status == 302:
-                                redirect_url = file_response.headers.get('Location')
-                                if redirect_url:
-                                    async with session.get(redirect_url) as final_response:
-                                        if final_response.status == 200:
-                                            with open(file_path, "wb") as f:
-                                                async for chunk in final_response.content.iter_chunked(16384):
-                                                    f.write(chunk)
-                                            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                                                return file_path
-                                            
-                            # Handle direct file stream
-                            elif file_response.status == 200:
-                                with open(file_path, "wb") as f:
-                                    async for chunk in file_response.content.iter_chunked(16384):
-                                        f.write(chunk)
-                                if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                                    return file_path
-
-    except Exception as e:
+                params={"url": video_id, "type": "audio", "api_key": API_KEY},
+                timeout=aiohttp.ClientTimeout(total=300)
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                with open(file_path, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(131072):
+                        f.write(chunk)
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            return file_path
+        return None
+    except Exception:
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)
-            except:
+            except Exception:
                 pass
-        LOGGER(__name__).error(f"Error downloading song via API: {e}")
-
-    return None
-
-async def download_video(link: str) -> str:
-    if not is_valid_youtube_link(link):
         return None
 
-    video_id = link.split('v=')[-1].split('&')[0] if 'v=' in link else link
 
+async def download_video(link: str) -> str:
+    video_id = link.split("v=")[-1].split("&")[0] if "v=" in link else link
     if not video_id or len(video_id) < 3:
         return None
 
-    DOWNLOAD_DIR = "downloads"
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.mp4")
-
-    if os.path.exists(file_path):
+    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
         return file_path
 
     try:
         async with aiohttp.ClientSession() as session:
-            params = {"url": video_id, "type": "video", "api_key": API_KEY, "key": API_KEY}
-            headers = {"Authorization": f"Bearer {API_KEY}"}
-
             async with session.get(
                 f"{API_URL}/download",
-                params=params,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    download_token = data.get("download_token")
-
-                    if download_token:
-                        stream_url = f"{API_URL}/stream/{video_id}?type=video&token={download_token}"
-
-                        async with session.get(
-                            stream_url,
-                            headers=headers,
-                            timeout=aiohttp.ClientTimeout(total=600)
-                        ) as file_response:
-                            
-                            if file_response.status == 302:
-                                redirect_url = file_response.headers.get('Location')
-                                if redirect_url:
-                                    async with session.get(redirect_url) as final_response:
-                                        if final_response.status == 200:
-                                            with open(file_path, "wb") as f:
-                                                async for chunk in final_response.content.iter_chunked(16384):
-                                                    f.write(chunk)
-                                            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                                                return file_path
-                                            
-                            elif file_response.status == 200:
-                                with open(file_path, "wb") as f:
-                                    async for chunk in file_response.content.iter_chunked(16384):
-                                        f.write(chunk)
-                                if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                                    return file_path
-
-    except Exception as e:
+                params={"url": video_id, "type": "video", "api_key": API_KEY},
+                timeout=aiohttp.ClientTimeout(total=600)
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                with open(file_path, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(131072):
+                        f.write(chunk)
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            return file_path
+        return None
+    except Exception:
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)
-            except:
+            except Exception:
                 pass
-        LOGGER(__name__).error(f"Error downloading video via API: {e}")
+        return None
 
-    return None
-
-async def shell_cmd(cmd):
-    proc = await asyncio.create_subprocess_shell(
-        cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    out, errorz = await proc.communicate()
-    if errorz:
-        if "unavailable videos are hidden" in (errorz.decode("utf-8")).lower():
-            return out.decode("utf-8")
-        else:
-            return errorz.decode("utf-8")
-    return out.decode("utf-8")
 
 class YouTubeAPI:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
-        # STRICT REGEX APPLIED HERE
-        self.regex = r"^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$"
+        self.regex = r"(?:youtube\.com|youtu\.be)"
         self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
         self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -195,7 +99,7 @@ class YouTubeAPI:
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
-        return bool(re.match(self.regex, link))
+        return bool(re.search(self.regex, link))
 
     async def url(self, message_1: Message) -> Union[str, None]:
         messages = [message_1]
@@ -206,14 +110,11 @@ class YouTubeAPI:
                 for entity in message.entities:
                     if entity.type == MessageEntityType.URL:
                         text = message.text or message.caption
-                        extracted_url = text[entity.offset: entity.offset + entity.length]
-                        if is_valid_youtube_link(extracted_url):
-                            return extracted_url
+                        return text[entity.offset: entity.offset + entity.length]
             elif message.caption_entities:
                 for entity in message.caption_entities:
                     if entity.type == MessageEntityType.TEXT_LINK:
-                        if is_valid_youtube_link(entity.url):
-                            return entity.url
+                        return entity.url
         return None
 
     async def details(self, link: str, videoid: Union[bool, str] = None):
@@ -266,8 +167,7 @@ class YouTubeAPI:
             downloaded_file = await download_video(link)
             if downloaded_file:
                 return 1, downloaded_file
-            else:
-                return 0, "Video download failed"
+            return 0, "Video download failed"
         except Exception as e:
             return 0, f"Video download error: {e}"
 
@@ -276,14 +176,20 @@ class YouTubeAPI:
             link = self.listbase + link
         if "&" in link:
             link = link.split("&")[0]
-        playlist = await shell_cmd(
-            f"yt-dlp -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
-        )
         try:
-            result = [key for key in playlist.split("\n") if key]
-        except:
-            result = []
-        return result
+            plist = await Playlist.get(link)
+        except Exception:
+            return []
+        videos = plist.get("videos") or []
+        ids = []
+        for data in videos[:limit]:
+            if not data:
+                continue
+            vid = data.get("id")
+            if not vid:
+                continue
+            ids.append(vid)
+        return ids
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
@@ -329,7 +235,7 @@ class YouTubeAPI:
                                 "yturl": link,
                             }
                         )
-                except:
+                except Exception:
                     continue
         return formats_available, link
 
@@ -359,17 +265,16 @@ class YouTubeAPI:
     ) -> str:
         if videoid:
             link = self.base + link
-
         try:
             if video:
                 downloaded_file = await download_video(link)
             else:
                 downloaded_file = await download_song(link)
-
             if downloaded_file:
                 return downloaded_file, True
-            else:
-                return None, False
+            return None, False
         except Exception:
             return None, False
-                        
+
+
+YouTube = YouTubeAPI()
