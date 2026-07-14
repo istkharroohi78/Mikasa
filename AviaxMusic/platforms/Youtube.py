@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import random
 from typing import Union
 import yt_dlp
 from pyrogram.enums import MessageEntityType
@@ -14,54 +15,40 @@ try:
 except ImportError:
     from youtubesearchpython.__future__ import VideosSearch
 
-API_URLS = []
-FALLBACK_API_URL = "https://shrutibots.site"
+# ==========================================
+# NEW API CONFIGURATION
+# ==========================================
+SHRUTI_API_URL = os.environ.get("SHRUTI_API_URL", "https://api.shrutibots.site")
+SHRUTI_API_KEY = os.environ.get("SHRUTI_API_KEY", "ShrutiBotsC0WH1GowF2HkGoKv4F3y")
 
-async def load_api_urls():
-    global API_URLS
-    logger = LOGGER("AviaxMusic.platforms.Youtube.py")
+ONEGRAB_API_URL = os.environ.get("ONEGRAB_API_URL", "https://api.onegrab.fun")
+ONEGRAB_API_KEYS = [
+    os.environ.get("ONEGRAB_API_KEY_1", "0b168a_I21sJa-aeWzx30ubnZOrbSmjY5eST1ID"),
+    os.environ.get("ONEGRAB_API_KEY_2", "c93415_Qc6z38kFH52j38qSF4MShLaojVL1JOB5"),
+    os.environ.get("ONEGRAB_API_KEY_3", "be7ccd_J_G_4M4LlNUSRbm9YuyhGKXoERPC3_1H")
+]
 
-    loaded_urls = []
+# Strict YouTube Regex Check
+YOUTUBE_REGEX = re.compile(r"^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$")
 
-    for pb_id in ["rLsBhAQa", "FwwmTRED", "nfsHqXH2"]:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"https://pastebin.com/raw/{pb_id}", timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    if response.status == 200:
-                        content = await response.text()
-                        url = content.strip()
-                        if url:
-                            loaded_urls.append(url)
-        except Exception:
-            continue
+def is_valid_youtube_link(link: str) -> bool:
+    """Checks if the provided link is a strictly valid YouTube URL."""
+    # Agar 11 character ka video ID hai (internal bot process), allow it
+    if len(link) == 11 and not link.startswith("http"):
+        return True
+    return bool(YOUTUBE_REGEX.match(link))
 
-    if loaded_urls:
-        API_URLS = loaded_urls
-        logger.info(f"Loaded {len(API_URLS)} API URLs successfully")
-    else:
-        API_URLS = [FALLBACK_API_URL]
-        logger.info("Using fallback API URL")
-
-try:
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        asyncio.create_task(load_api_urls())
-    else:
-        loop.run_until_complete(load_api_urls())
-except RuntimeError:
-    pass
-
-async def get_working_api_url():
-    global API_URLS
-
-    if not API_URLS:
-        await load_api_urls()
-        if not API_URLS:
-            API_URLS = [FALLBACK_API_URL]
-
-    return API_URLS
+def get_api_configs():
+    """Returns a list of API configs to try (Shruti first, then a random OneGrab)"""
+    return [
+        {"url": SHRUTI_API_URL, "key": SHRUTI_API_KEY},
+        {"url": ONEGRAB_API_URL, "key": random.choice(ONEGRAB_API_KEYS)}
+    ]
 
 async def download_song(link: str) -> str:
+    if not is_valid_youtube_link(link):
+        return None
+
     video_id = link.split('v=')[-1].split('&')[0] if 'v=' in link else link
 
     if not video_id or len(video_id) < 3:
@@ -74,16 +61,22 @@ async def download_song(link: str) -> str:
     if os.path.exists(file_path):
         return file_path
 
-    api_urls = await get_working_api_url()
+    apis_to_try = get_api_configs()
 
-    for api_url in api_urls:
+    for api in apis_to_try:
+        api_url = api["url"]
+        api_key = api["key"]
+        
         try:
             async with aiohttp.ClientSession() as session:
-                params = {"url": video_id, "type": "audio"}
+                # API keys are usually passed in params or headers. Passing in both to be safe.
+                params = {"url": video_id, "type": "audio", "api_key": api_key, "key": api_key}
+                headers = {"Authorization": f"Bearer {api_key}"}
 
                 async with session.get(
                     f"{api_url}/download",
                     params=params,
+                    headers=headers,
                     timeout=aiohttp.ClientTimeout(total=7)
                 ) as response:
                     if response.status != 200:
@@ -99,6 +92,7 @@ async def download_song(link: str) -> str:
 
                     async with session.get(
                         stream_url,
+                        headers=headers,
                         timeout=aiohttp.ClientTimeout(total=300)
                     ) as file_response:
                         if file_response.status == 302:
@@ -136,6 +130,9 @@ async def download_song(link: str) -> str:
     return None
 
 async def download_video(link: str) -> str:
+    if not is_valid_youtube_link(link):
+        return None
+
     video_id = link.split('v=')[-1].split('&')[0] if 'v=' in link else link
 
     if not video_id or len(video_id) < 3:
@@ -148,16 +145,21 @@ async def download_video(link: str) -> str:
     if os.path.exists(file_path):
         return file_path
 
-    api_urls = await get_working_api_url()
+    apis_to_try = get_api_configs()
 
-    for api_url in api_urls:
+    for api in apis_to_try:
+        api_url = api["url"]
+        api_key = api["key"]
+        
         try:
             async with aiohttp.ClientSession() as session:
-                params = {"url": video_id, "type": "video"}
+                params = {"url": video_id, "type": "video", "api_key": api_key, "key": api_key}
+                headers = {"Authorization": f"Bearer {api_key}"}
 
                 async with session.get(
                     f"{api_url}/download",
                     params=params,
+                    headers=headers,
                     timeout=aiohttp.ClientTimeout(total=7)
                 ) as response:
                     if response.status != 200:
@@ -173,6 +175,7 @@ async def download_video(link: str) -> str:
 
                     async with session.get(
                         stream_url,
+                        headers=headers,
                         timeout=aiohttp.ClientTimeout(total=600)
                     ) as file_response:
                         if file_response.status == 302:
@@ -226,7 +229,8 @@ async def shell_cmd(cmd):
 class YouTubeAPI:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
-        self.regex = r"(?:youtube\.com|youtu\.be)"
+        # STRICT REGEX APPLIED HERE TOO
+        self.regex = r"^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$"
         self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
         self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -234,7 +238,7 @@ class YouTubeAPI:
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
-        return bool(re.search(self.regex, link))
+        return bool(re.match(self.regex, link))
 
     async def url(self, message_1: Message) -> Union[str, None]:
         messages = [message_1]
@@ -245,11 +249,14 @@ class YouTubeAPI:
                 for entity in message.entities:
                     if entity.type == MessageEntityType.URL:
                         text = message.text or message.caption
-                        return text[entity.offset: entity.offset + entity.length]
+                        extracted_url = text[entity.offset: entity.offset + entity.length]
+                        if is_valid_youtube_link(extracted_url):
+                            return extracted_url
             elif message.caption_entities:
                 for entity in message.caption_entities:
                     if entity.type == MessageEntityType.TEXT_LINK:
-                        return entity.url
+                        if is_valid_youtube_link(entity.url):
+                            return entity.url
         return None
 
     async def details(self, link: str, videoid: Union[bool, str] = None):
@@ -408,3 +415,4 @@ class YouTubeAPI:
                 return None, False
         except Exception:
             return None, False
+    
