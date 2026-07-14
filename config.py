@@ -36,15 +36,15 @@ API_KEY = getenv('API_KEY', 'NxGBNexGenBots0c444d') # youtube song api key, gene
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://github.com/Itzz-Sukku/ist",
+    "https://github.com/istkharroohi78/Mikasa",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "master")
 GIT_TOKEN = getenv(
     "GIT_TOKEN", None
 )  # Fill this variable if your upstream repository is private
 
-SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/IamIstkhar")
-SUPPORT_GROUP = getenv("SUPPORT_GROUP", "https://t.me/+0oekeamatNtmNjll")
+SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/TuneBots")
+SUPPORT_GROUP = getenv("SUPPORT_GROUP", "https://t.me/TuneBots")
 
 # Set this to True if you want the assistant to automatically leave chats after an interval
 AUTO_LEAVING_ASSISTANT = bool(getenv("AUTO_LEAVING_ASSISTANT", False))
